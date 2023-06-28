@@ -21,7 +21,19 @@ const ONE_UNIT = 1_000_000_000;
 //TODO: Learn how to return result for sub calls
 //TODO: Improve error messages
 
-export function dns_resolve(args: StaticArray<u8>): Result<Address> {
+function serializeResult<T>(result: Result<T>): StaticArray<u8> {
+  let args = new Args();
+  if (result.isOk()) {
+    args.add<u8>(0);
+    args.add<T>(result.unwrap());
+  } else {
+    args.add<u8>(1);
+    args.add<string>(result.error!);
+  }
+  return args.serialize();
+}
+
+export function dns_resolve(args: StaticArray<u8>): StaticArray<u8> {
   let args_decoded = new Args(args);
   let full_domain = args_decoded.nextString().unwrap();
   let domain_array = split_domain(full_domain);
@@ -29,11 +41,9 @@ export function dns_resolve(args: StaticArray<u8>): Result<Address> {
     let address = Storage.get(domain_array[1]);
     let args = new Args();
     args.add(domain_array[0]);
-    //Todo: Learn how to return call with result return type
-    //return new Result(call(new Address(address), "dns_resolve", args, Context.transferredCoins()));
-    return new Result(new Address(address), "Not implemented yet.");
+    return call(new Address(address), "dns_resolve", args, Context.transferredCoins());
   } else {
-    return new Result(new Address(Storage.get(domain_array[1])));
+    return serializeResult<string>(new Result(Storage.get(domain_array[1])));
   }
 }
 
@@ -74,30 +84,27 @@ function split_domain(domain: string): StaticArray<string> {
   }
 }
 
-export function dns_alloc_cost(args: StaticArray<u8>): Result<Amount> {
+export function dns_alloc_cost(args: StaticArray<u8>): StaticArray<u8> {
   let args_decoded = new Args(args);
   let full_domain = args_decoded.nextString().unwrap();
   let address = new Address(args_decoded.nextString().unwrap());
   let domain_array = split_domain(full_domain);
   let cost = new Amount(0);
+  //TODO: Add storage cost
   if (domain_array[0] != "") {
     let address = Storage.get(domain_array[1]);
     let args = new Args();
     args.add(domain_array[0]);
-    //Todo: Learn how to return call with result return type
-    //cost.add(call(new Address(address), "dns_alloc_cost", args, Context.transferredCoins()));
+    return call(new Address(address), "dns_alloc_cost", args, Context.transferredCoins());
   }
-  //TODO: Add storage cost
-  //TODO: report issue cant use + operator
   cost = cost.add(compute_cost(domain_array[1])).unwrap();
   if (!is_valid_domain(domain_array[1])) {
-    return new Result(new Amount(0), "Invalid domain name.");
+    return serializeResult<Amount>(new Result(new Amount(0), "Invalid domain name."));
   }
-  return new Result(cost);
+  return serializeResult<Amount>(new Result(cost));
 }
 
-//TODO: Learn how to return void as a return type
-export function dns_alloc(args: StaticArray<u8>): Result<StaticArray<u8>> {
+export function dns_alloc(args: StaticArray<u8>): StaticArray<u8> {
   let args_decoded = new Args(args);
   let full_domain = args_decoded.nextString().unwrap();
   let address = new Address(args_decoded.nextString().unwrap());
@@ -106,19 +113,18 @@ export function dns_alloc(args: StaticArray<u8>): Result<StaticArray<u8>> {
     let address = Storage.get(domain_array[1]);
     let args = new Args();
     args.add(domain_array[0]);
-    //Todo: Learn how to return call with result return type
-    return new Result(call(new Address(address), "dns_alloc", args, Context.transferredCoins()));
+    return call(new Address(address), "dns_alloc", args, Context.transferredCoins());
   } else {
     let cost = compute_cost(domain_array[1]);
     if (Context.transferredCoins() < cost.value) {
-      return new Result(new StaticArray<u8>(0), "Not enough coins to pay for the domain name.");
+      return serializeResult<StaticArray<u8>>(new Result(new StaticArray<u8>(0), "Not enough coins to pay for the domain name."));
     }
     Storage.set(domain_array[1], address.toString());
-    return new Result(new StaticArray<u8>(0));
+    return serializeResult<StaticArray<u8>>(new Result(new StaticArray<u8>(0)));
   }
 }
 
-export function dns_free(args: StaticArray<u8>): Result<StaticArray<u8>> {
+export function dns_free(args: StaticArray<u8>): StaticArray<u8> {
   let args_decoded = new Args(args);
   let full_domain = args_decoded.nextString().unwrap();
   let domain_array = split_domain(full_domain);
@@ -126,21 +132,20 @@ export function dns_free(args: StaticArray<u8>): Result<StaticArray<u8>> {
     let address = Storage.get(domain_array[1]);
     let args = new Args();
     args.add(domain_array[0]);
-    //Todo: Learn how to return call with result return type
-    return new Result(call(new Address(address), "dns_free", args, Context.transferredCoins()));
+    return call(new Address(address), "dns_free", args, Context.transferredCoins());
   } else {
     let address = Storage.get(domain_array[1]);
     if (address != Context.caller().toString()) {
-      return new Result(new StaticArray<u8>(0), "Only the owner of the domain can free it.");
+      return serializeResult<StaticArray<u8>>(new Result(new StaticArray<u8>(0), "Only the owner of the domain can free it."));
     }
     Storage.del(domain_array[1]);
     let cost = compute_cost(domain_array[1]);
     transferCoins(Context.caller(), cost.value / 2);
-    return new Result(new StaticArray<u8>(0));
+    return serializeResult<StaticArray<u8>>(new Result(new StaticArray<u8>(0)));
   }
 }
 
-export function dns_transfer(args: StaticArray<u8>): Result<StaticArray<u8>> {
+export function dns_transfer(args: StaticArray<u8>): StaticArray<u8> {
   let args_decoded = new Args(args);
   let full_domain = args_decoded.nextString().unwrap();
   let new_addr = new Address(args_decoded.nextString().unwrap());
@@ -149,14 +154,13 @@ export function dns_transfer(args: StaticArray<u8>): Result<StaticArray<u8>> {
     let address = Storage.get(domain_array[1]);
     let args = new Args();
     args.add(domain_array[0]);
-    //Todo: Learn how to return call with result return type
-    return new Result(call(new Address(address), "dns_transfer", args, Context.transferredCoins()));
+    return call(new Address(address), "dns_transfer", args, Context.transferredCoins());
   } else {
     let address = Storage.get(domain_array[1]);
     if (address != Context.caller().toString()) {
-      return new Result(new StaticArray<u8>(0), "Only the owner of the domain can free it.");
+      return serializeResult<StaticArray<u8>>(new Result(new StaticArray<u8>(0), "Only the owner of the domain can free it."));
     }
     Storage.set(domain_array[1], new_addr.toString());
-    return new Result(new StaticArray<u8>(0));
+    return serializeResult<StaticArray<u8>>(new Result(new StaticArray<u8>(0)));
   }
 }
